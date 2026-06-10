@@ -1,0 +1,1170 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  RotateCcw, 
+  Volume2, 
+  VolumeX, 
+  Sparkles, 
+  Trophy, 
+  Music, 
+  Info, 
+  X,
+  Sliders,
+  Gamepad2
+} from 'lucide-react';
+
+// --- CHILL CHIPTUNE & SOUNDSCAPE SYNTH ENGINE ---
+class SensoryAudioEngine {
+  constructor() {
+    this.ctx = null;
+    this.isMuted = false;
+    this.waveType = 'sine';
+    this.reverbNode = null;
+  }
+
+  init() {
+    if (!this.ctx) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+      
+      const delay = this.ctx.createDelay();
+      const feedback = this.ctx.createGain();
+      
+      delay.delayTime.value = 0.35;
+      feedback.gain.value = 0.4; // Spacious echo trail
+      
+      delay.connect(feedback);
+      feedback.connect(delay);
+      
+      this.reverbNode = this.ctx.createGain();
+      this.reverbNode.gain.value = 0.6;
+      
+      delay.connect(this.reverbNode);
+      this.reverbNode.connect(this.ctx.destination);
+    }
+    if (this.ctx.state === 'suspended') {
+      this.ctx.resume();
+    }
+  }
+
+  playTick(frequency = 300, duration = 0.1, type = null) {
+    if (this.isMuted) return;
+    this.init();
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = type || this.waveType;
+      osc.frequency.setValueAtTime(frequency, this.ctx.currentTime);
+      
+      gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+      
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start();
+      osc.stop(this.ctx.currentTime + duration);
+    } catch (e) {
+      console.warn("Audio Context blocked", e);
+    }
+  }
+
+  playPop() {
+    this.playTick(450, 0.08, 'sine');
+  }
+
+  playSlice() {
+    this.playTick(200, 0.2, 'triangle');
+    setTimeout(() => this.playTick(150, 0.1, 'sine'), 50);
+  }
+
+  playPerfect(level = 0) {
+    const scale = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88, 523.25];
+    const freq = scale[level % scale.length] * (1 + Math.floor(level / scale.length) * 0.5);
+    this.playTick(freq, 0.25, this.waveType);
+    setTimeout(() => {
+      this.playTick(freq * 1.5, 0.15, 'sine');
+    }, 60);
+  }
+
+  playCrash() {
+    if (this.isMuted) return;
+    this.init();
+    try {
+      const bufferSize = this.ctx.sampleRate * 0.4;
+      const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      const noise = this.ctx.createBufferSource();
+      noise.buffer = buffer;
+
+      const filter = this.ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.setValueAtTime(600, this.ctx.currentTime);
+      filter.frequency.exponentialRampToValueAtTime(10, this.ctx.currentTime + 0.35);
+
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.35);
+
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(this.ctx.destination);
+      noise.start();
+    } catch (e) {
+      this.playTick(90, 0.3, 'triangle');
+    }
+  }
+
+  playCollision(frequency = 440, volume = 0.1, duration = 0.3) {
+    if (this.isMuted) return;
+    this.init();
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      
+      osc.type = this.waveType;
+      osc.frequency.setValueAtTime(frequency, this.ctx.currentTime);
+      
+      gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + duration);
+      
+      osc.connect(gain);
+      if (this.reverbNode) {
+        gain.connect(this.reverbNode);
+      }
+      gain.connect(this.ctx.destination);
+      
+      osc.start();
+      osc.stop(this.ctx.currentTime + duration);
+    } catch (e) {
+      console.warn("Synth blocked:", e);
+    }
+  }
+
+  playSeqBeat(frequency) {
+    if (this.isMuted) return;
+    this.init();
+    try {
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = this.waveType;
+      osc.frequency.setValueAtTime(frequency, this.ctx.currentTime);
+      gain.gain.setValueAtTime(0.03, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.25);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.25);
+    } catch (e) {}
+  }
+}
+
+const audio = new SensoryAudioEngine();
+
+const PALETTES = {
+  yellow: {
+    bg: 'bg-[#FFE24D]',
+    border: 'border-black',
+    accent: 'bg-[#C084FC]',
+    highlight: 'bg-[#2DD4BF]',
+    secondary: 'bg-[#F43F5E]',
+    text: 'text-black',
+    panelBg: 'bg-white',
+    gridBg: 'bg-[#FAF9F5]',
+    canvasBg: '#111827'
+  },
+  lavender: {
+    bg: 'bg-[#D6C7FF]',
+    border: 'border-black',
+    accent: 'bg-[#FFE24D]',
+    highlight: 'bg-[#FF6B8B]',
+    secondary: 'bg-[#4ADE80]',
+    text: 'text-black',
+    panelBg: 'bg-white',
+    gridBg: 'bg-[#FAF9F6]',
+    canvasBg: '#1E1B4B'
+  },
+  mint: {
+    bg: 'bg-[#A7F3D0]',
+    border: 'border-black',
+    accent: 'bg-[#FF7396]',
+    highlight: 'bg-[#FFE24D]',
+    secondary: 'bg-[#818CF8]',
+    text: 'text-black',
+    panelBg: 'bg-white',
+    gridBg: 'bg-[#FAF9F5]',
+    canvasBg: '#062017'
+  }
+};
+
+const SCALES = {
+  zen: [130.81, 146.83, 164.81, 196.00, 220.00, 261.63, 293.66, 329.63, 392.00, 440.00, 523.25], // Pentatonic Major
+  in_sen: [130.81, 138.59, 164.81, 196.00, 207.65, 261.63, 277.18, 329.63, 392.00, 415.30, 523.25], // Japanese In Sen
+  solar: [146.83, 164.81, 185.00, 220.00, 246.94, 293.66, 329.63, 370.00, 440.00, 493.88, 587.33] // Lydian Scale
+};
+
+export default function App() {
+  const [activeTheme, setActiveTheme] = useState('yellow');
+  const t = PALETTES[activeTheme];
+  const [synthWave, setSynthWave] = useState('sine');
+  const [activeScale, setActiveScale] = useState('zen');
+  const [activeTab, setActiveTab] = useState('stacker'); // 'stacker' or 'stimulant'
+  const [isMuted, setIsMuted] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+
+  // ==========================================
+  // --- STACKER GAME STATE & LOGIC ---
+  // ==========================================
+  const STACK_WIDTH = 8;
+  const STACK_HEIGHT = 12;
+  const [stackGrid, setStackGrid] = useState(Array(STACK_HEIGHT).fill(null).map(() => Array(STACK_WIDTH).fill(0)));
+  const [stackLevel, setStackLevel] = useState(0); 
+  const [stackBlockWidth, setStackBlockWidth] = useState(4);
+  const [stackBlockPos, setStackBlockPos] = useState(0); 
+  const [stackDirection, setStackDirection] = useState(1); 
+  const [stackGameState, setStackGameState] = useState('START'); 
+  const [stackScore, setStackScore] = useState(0);
+  const [highScoreStacker, setHighScoreStacker] = useState(0);
+  const [stackPerfectStreak, setStackPerfectStreak] = useState(0);
+  const [stackFlashScreen, setStackFlashScreen] = useState(false);
+  const [comboPopup, setComboPopup] = useState(null);
+
+  const stackTimerRef = useRef(null);
+  const stackSpeedRef = useRef(280);
+
+  const calculateStackSpeed = (lvl) => {
+    return Math.max(70, 280 - lvl * 18);
+  };
+
+  useEffect(() => {
+    if (activeTab !== 'stacker' || stackGameState !== 'PLAYING') return;
+
+    const tick = () => {
+      setStackBlockPos((pos) => {
+        let nextPos = pos + stackDirection;
+        if (nextPos + stackBlockWidth > STACK_WIDTH) {
+          setStackDirection(-1);
+          return pos - 1;
+        } else if (nextPos < 0) {
+          setStackDirection(1);
+          return pos + 1;
+        }
+        return nextPos;
+      });
+    };
+
+    stackTimerRef.current = setInterval(tick, stackSpeedRef.current);
+    return () => clearInterval(stackTimerRef.current);
+  }, [activeTab, stackGameState, stackDirection, stackBlockWidth, stackLevel]);
+
+  const triggerComboPopup = (text) => {
+    setComboPopup(text);
+    setTimeout(() => setComboPopup(null), 600);
+  };
+
+  const handleDropStackBlock = () => {
+    if (stackGameState !== 'PLAYING') return;
+
+    audio.init();
+    clearInterval(stackTimerRef.current);
+
+    const currentY = STACK_HEIGHT - 1 - stackLevel;
+
+    if (stackLevel === 0) {
+      audio.playPerfect(0);
+      const nextGrid = [...stackGrid];
+      for (let i = 0; i < stackBlockWidth; i++) {
+        nextGrid[currentY][stackBlockPos + i] = 1;
+      }
+      setStackGrid(nextGrid);
+      setStackScore(10);
+      triggerComboPopup("nice start!");
+      advanceToNextStackLevel(stackBlockWidth, stackBlockPos);
+      return;
+    }
+
+    const prevY = currentY + 1;
+    const prevRow = stackGrid[prevY];
+
+    const previousStart = prevRow.indexOf(1);
+    const previousEnd = prevRow.lastIndexOf(1);
+
+    const currentStart = stackBlockPos;
+    const currentEnd = stackBlockPos + stackBlockWidth - 1;
+
+    let overlapStart = Math.max(currentStart, previousStart);
+    let overlapEnd = Math.min(currentEnd, previousEnd);
+
+    let finalOverlapWidth = 0;
+    if (overlapStart <= overlapEnd) {
+      finalOverlapWidth = overlapEnd - overlapStart + 1;
+    }
+
+    const nextGrid = [...stackGrid];
+
+    for (let i = 0; i < STACK_WIDTH; i++) {
+      nextGrid[currentY][i] = 0;
+    }
+
+    if (finalOverlapWidth > 0) {
+      for (let i = 0; i < finalOverlapWidth; i++) {
+        nextGrid[currentY][overlapStart + i] = 1;
+      }
+      setStackGrid(nextGrid);
+
+      if (finalOverlapWidth === stackBlockWidth) {
+        const nextStreak = stackPerfectStreak + 1;
+        setStackPerfectStreak(nextStreak);
+        setStackFlashScreen(true);
+        setTimeout(() => setStackFlashScreen(false), 100);
+        audio.playPerfect(stackLevel);
+
+        if (nextStreak === 1) triggerComboPopup("perfect!");
+        else if (nextStreak === 2) triggerComboPopup("clean combo!");
+        else if (nextStreak >= 3) triggerComboPopup(`immaculate x${nextStreak}!`);
+      } else {
+        setStackPerfectStreak(0);
+        audio.playSlice();
+        triggerComboPopup("sliced!");
+      }
+
+      const basePoints = finalOverlapWidth * 10;
+      const multiplierBonus = (stackLevel + 1) * (stackPerfectStreak > 0 ? stackPerfectStreak : 1);
+      const pointsEarned = basePoints * multiplierBonus;
+      setStackScore((prev) => prev + pointsEarned);
+
+      if (stackLevel + 1 === STACK_HEIGHT) {
+        setStackGameState('WIN');
+        audio.playPerfect(15);
+        if (stackScore + pointsEarned > highScoreStacker) {
+          setHighScoreStacker(stackScore + pointsEarned);
+        }
+      } else {
+        advanceToNextStackLevel(finalOverlapWidth, overlapStart);
+      }
+    } else {
+      setStackGameState('GAMEOVER');
+      setStackPerfectStreak(0);
+      audio.playCrash();
+      if (stackScore > highScoreStacker) {
+        setHighScoreStacker(stackScore);
+      }
+    }
+  };
+
+  const advanceToNextStackLevel = (nextWidth, nextPos) => {
+    setStackBlockWidth(nextWidth);
+    setStackBlockPos(nextPos);
+    setStackLevel((lvl) => {
+      const nextLvl = lvl + 1;
+      stackSpeedRef.current = calculateStackSpeed(nextLvl);
+      return nextLvl;
+    });
+    setStackDirection(Math.random() > 0.5 ? 1 : -1);
+  };
+
+  const handleStartStackGame = () => {
+    audio.init();
+    audio.playPop();
+    const blankGrid = Array(STACK_HEIGHT).fill(null).map(() => Array(STACK_WIDTH).fill(0));
+    setStackGrid(blankGrid);
+    setStackLevel(0);
+    setStackBlockWidth(4);
+    setStackBlockPos(0);
+    setStackDirection(1);
+    setStackScore(0);
+    setStackPerfectStreak(0);
+    stackSpeedRef.current = calculateStackSpeed(0);
+    setStackGameState('PLAYING');
+  };
+
+  // --- STIMULANT SANDBOX SIMULATOR CONFIGS ---
+  const [activeTool, setActiveTool] = useState('bumper'); // 'bumper', 'attractor', 'clear'
+  const [gravityStr, setGravityStr] = useState(0.2); 
+  const [spawnSpeed, setSpawnSpeed] = useState(3); 
+  
+  const [bumpers, setBumpers] = useState([
+    { id: 1, x: 200, y: 130, r: 24, freqIndex: 5, color: '#F43F5E', pulse: 0 },
+    { id: 2, x: 100, y: 230, r: 30, freqIndex: 3, color: '#C084FC', pulse: 0 },
+    { id: 3, x: 300, y: 230, r: 28, freqIndex: 7, color: '#2DD4BF', pulse: 0 },
+  ]);
+  const [attractors, setAttractors] = useState([
+    { id: 4, x: 200, y: 330, r: 16, type: 'pull', power: 3.5 }
+  ]);
+
+  // --- COMMON SEQUENCER STEP-BEAT STATE ---
+  const [seqGrid, setSeqGrid] = useState([
+    [0, 0, 0, 0, 1, 0, 0, 0], 
+    [0, 0, 1, 0, 0, 0, 1, 0], 
+    [0, 1, 0, 1, 0, 1, 0, 1], 
+    [1, 0, 0, 0, 1, 0, 0, 0], 
+  ]);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [seqPlaying, setSeqPlaying] = useState(true); 
+  const seqFrequencies = [261.63, 220.00, 196.00, 146.83]; 
+
+  const canvasRef = useRef(null);
+  const particlesRef = useRef([]);
+  const requestRef = useRef(null);
+  
+  // High efficiency loop reference points
+  const bumpersRef = useRef(bumpers);
+  const attractorsRef = useRef(attractors);
+  const gravityRef = useRef(gravityStr);
+  const spawnSpeedRef = useRef(spawnSpeed);
+  const activeScaleRef = useRef(activeScale);
+  const canvasBgRef = useRef(t.canvasBg);
+
+  useEffect(() => { bumpersRef.current = bumpers; }, [bumpers]);
+  useEffect(() => { attractorsRef.current = attractors; }, [attractors]);
+  useEffect(() => { gravityRef.current = gravityStr; }, [gravityStr]);
+  useEffect(() => { spawnSpeedRef.current = spawnSpeed; }, [spawnSpeed]);
+  useEffect(() => { activeScaleRef.current = activeScale; }, [activeScale]);
+  useEffect(() => { canvasBgRef.current = t.canvasBg; }, [t.canvasBg]);
+
+  useEffect(() => {
+    audio.isMuted = isMuted;
+  }, [isMuted]);
+
+  useEffect(() => {
+    audio.waveType = synthWave;
+  }, [synthWave]);
+
+  // Sequencer beat tick
+  useEffect(() => {
+    let interval = null;
+    if (seqPlaying) {
+      interval = setInterval(() => {
+        setCurrentStep((prev) => {
+          const next = (prev + 1) % 8;
+          seqGrid.forEach((row, rowIndex) => {
+            if (row[next] === 1) {
+              audio.playSeqBeat(seqFrequencies[rowIndex]);
+            }
+          });
+          return next;
+        });
+      }, 180);
+    } else {
+      clearInterval(interval);
+    }
+    return () => clearInterval(interval);
+  }, [seqPlaying, seqGrid]);
+
+  // --- SIMULATION PHYSICS ENGINE (FIXED GLITCH REGARDING WIDTH RE-INITIALIZATION) ---
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    
+    // Set Dimensions strictly once on load/toggle
+    const parentWidth = canvas.parentElement.clientWidth || 360;
+    const fixedHeight = 400;
+    canvas.width = parentWidth;
+    canvas.height = fixedHeight;
+
+    const handleResize = () => {
+      if (!canvas) return;
+      canvas.width = canvas.parentElement.clientWidth || 360;
+    };
+    window.addEventListener('resize', handleResize);
+
+    const tick = () => {
+      // Create trailing visual effect without resetting sizing buffer
+      ctx.fillStyle = `${canvasBgRef.current}33`; 
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      // Auto emit falling stream particles from top
+      if (Math.random() < (spawnSpeedRef.current * 0.1)) {
+        particlesRef.current.push({
+          x: canvas.width / 2 + (Math.random() * 40 - 20),
+          y: -10,
+          vx: Math.random() * 2 - 1,
+          vy: Math.random() * 2 + 1,
+          size: Math.random() * 3 + 2.5,
+          color: `hsl(${Math.random() * 360}, 85%, 70%)`,
+          life: 250 
+        });
+      }
+
+      // Draw Attractors / Singularities
+      attractorsRef.current.forEach((att) => {
+        const glow = ctx.createRadialGradient(att.x, att.y, 2, att.x, att.y, att.r * 2);
+        glow.addColorStop(0, '#FFFFFF');
+        glow.addColorStop(0.3, '#C084FC');
+        glow.addColorStop(1, 'transparent');
+
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(att.x, att.y, att.r * 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(att.x, att.y, att.r, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+
+      // Draw Bumper nodes
+      bumpersRef.current.forEach((b) => {
+        if (b.pulse > 0) {
+          ctx.strokeStyle = `${b.color}aa`;
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.arc(b.x, b.y, b.r + (12 - b.pulse * 12), 0, Math.PI * 2);
+          ctx.stroke();
+          b.pulse -= 0.05;
+        }
+
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(b.x - b.r * 0.3, b.y - b.r * 0.3, b.r * 0.2, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      // Update Particles
+      let particles = particlesRef.current;
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+
+        p.vy += gravityRef.current;
+
+        // Apply attractors
+        attractorsRef.current.forEach((att) => {
+          const dx = att.x - p.x;
+          const dy = att.y - p.y;
+          const distSq = dx * dx + dy * dy;
+          const dist = Math.sqrt(distSq);
+
+          if (dist > 5) {
+            const pullForce = (att.power * 25) / (distSq + 100);
+            p.vx += (dx / dist) * pullForce;
+            p.vy += (dy / dist) * pullForce;
+          }
+        });
+
+        const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+        if (speed > 12) {
+          p.vx = (p.vx / speed) * 12;
+          p.vy = (p.vy / speed) * 12;
+        }
+
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Check Bounces
+        bumpersRef.current.forEach((b) => {
+          const dx = p.x - b.x;
+          const dy = p.y - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < b.r + p.size) {
+            const nx = dx / dist;
+            const ny = dy / dist;
+
+            const dot = p.vx * nx + p.vy * ny;
+            p.vx = (p.vx - 2 * dot * nx) * 0.85;
+            p.vy = (p.vy - 2 * dot * ny) * 0.85;
+
+            p.x = b.x + nx * (b.r + p.size + 2);
+            p.y = b.y + ny * (b.r + p.size + 2);
+
+            const scaleNotes = SCALES[activeScaleRef.current];
+            const pitch = scaleNotes[b.freqIndex % scaleNotes.length];
+            audio.playCollision(pitch, 0.12, 0.4);
+
+            b.pulse = 1.0;
+          }
+        });
+
+        if (p.life <= 0 || p.y > canvas.height + 20 || p.x < -20 || p.x > canvas.width + 20) {
+          particles.splice(i, 1);
+        }
+      }
+
+      requestRef.current = requestAnimationFrame(tick);
+    };
+
+    requestRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      cancelAnimationFrame(requestRef.current);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [activeTab]);
+
+  // --- INTERACTION: PLACING NODES ---
+  const handleCanvasClick = (e) => {
+    audio.init();
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    if (activeTool === 'bumper') {
+      audio.playPop();
+      const colors = ['#F43F5E', '#C084FC', '#2DD4BF', '#FFE24D'];
+      const chosenColor = colors[Math.floor(Math.random() * colors.length)];
+      const sizeRadius = Math.floor(Math.random() * 15) + 18;
+
+      const newBumper = {
+        id: Date.now(),
+        x,
+        y,
+        r: sizeRadius,
+        freqIndex: Math.floor(Math.random() * 10),
+        color: chosenColor,
+        pulse: 0
+      };
+      setBumpers((prev) => [...prev, newBumper]);
+    } else if (activeTool === 'attractor') {
+      audio.playPop();
+      const newAttractor = {
+        id: Date.now(),
+        x,
+        y,
+        r: 16,
+        type: 'pull',
+        power: 4.0
+      };
+      setAttractors((prev) => [...prev, newAttractor]);
+    } else if (activeTool === 'clear') {
+      audio.playSlice();
+      setBumpers((prev) => prev.filter((b) => Math.hypot(b.x - x, b.y - y) > b.r));
+      setAttractors((prev) => prev.filter((a) => Math.hypot(a.x - x, a.y - y) > a.r * 1.5));
+    }
+  };
+
+  const handleClearAll = () => {
+    audio.playCrash();
+    setBumpers([]);
+    setAttractors([]);
+    particlesRef.current = [];
+  };
+
+  const triggerPresets = () => {
+    audio.playPop();
+    setBumpers([
+      { id: 10, x: 120, y: 130, r: 24, freqIndex: 4, color: '#C084FC', pulse: 0 },
+      { id: 11, x: 280, y: 130, r: 24, freqIndex: 7, color: '#2DD4BF', pulse: 0 },
+      { id: 12, x: 200, y: 200, r: 35, freqIndex: 0, color: '#FFE24D', pulse: 0 },
+      { id: 13, x: 80, y: 280, r: 20, freqIndex: 2, color: '#F43F5E', pulse: 0 },
+      { id: 14, x: 320, y: 280, r: 20, freqIndex: 9, color: '#F43F5E', pulse: 0 },
+    ]);
+    setAttractors([
+      { id: 15, x: 200, y: 320, r: 16, type: 'pull', power: 3.8 }
+    ]);
+  };
+
+  const toggleSequencerNode = (row, col) => {
+    audio.init();
+    audio.playPop();
+    const nextSeq = [...seqGrid];
+    nextSeq[row][col] = nextSeq[row][col] === 1 ? 0 : 1;
+    setSeqGrid(nextSeq);
+  };
+
+  // Keyboard Spacebar event mapping for both tabs
+  useEffect(() => {
+    const handleKeyPress = (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if (activeTab === 'stacker') {
+          if (stackGameState === 'PLAYING') {
+            handleDropStackBlock();
+          } else {
+            handleStartStackGame();
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyPress);
+    return () => window.removeEventListener('keydown', handleKeyPress);
+  }, [activeTab, stackGameState, stackBlockPos, stackBlockWidth, stackLevel, stackGrid, stackDirection, stackPerfectStreak]);
+
+  return (
+    <div className={`min-h-screen ${t.bg} ${t.text} font-sans p-4 sm:p-8 flex flex-col items-center justify-center transition-all duration-300 relative overflow-hidden`}>
+      
+      {/* Decorative Rotating Neo-Brutalist Starburst Vectors */}
+      <div className="absolute top-10 left-10 pointer-events-none opacity-20 animate-spin" style={{ animationDuration: '25s' }}>
+        <svg width="120" height="120" viewBox="0 0 100 100" fill="currentColor" className="text-black">
+          <path d="M50,0 L56,30 L85,15 L70,44 L100,50 L70,56 L85,85 L56,70 L50,100 L44,70 L15,85 L30,56 L0,50 L30,44 L15,15 L44,30 Z" />
+        </svg>
+      </div>
+      <div className="absolute bottom-10 right-10 pointer-events-none opacity-20 animate-spin" style={{ animationDuration: '35s' }}>
+        <svg width="100" height="100" viewBox="0 0 100 100" fill="currentColor" className="text-black">
+          <path d="M50,0 L56,30 L85,15 L70,44 L100,50 L70,56 L85,85 L56,70 L50,100 L44,70 L15,85 L30,56 L0,50 L30,44 L15,15 L44,30 Z" />
+        </svg>
+      </div>
+
+      <div className="max-w-4xl w-full flex flex-col gap-6 relative z-10">
+        
+        {/* --- COMPACT HEADER --- */}
+        <header className={`border-[4px] border-black ${t.panelBg} p-5 rounded-[24px] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col sm:flex-row justify-between items-center gap-4`}>
+          <div className="text-center sm:text-left">
+            <h1 className="text-4xl font-black tracking-tight leading-none lowercase">
+              arcade<span className="text-rose-500 font-black">.</span>
+            </h1>
+            <p className="text-xs font-bold uppercase tracking-widest text-slate-400 mt-1">
+              cozy sensory & physics cabinet
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2 items-center justify-center">
+            {/* Color Palette Switcher */}
+            <div className="flex border-[3px] border-black rounded-full overflow-hidden bg-white p-1">
+              {Object.keys(PALETTES).map((name) => (
+                <button
+                  key={name}
+                  onClick={() => {
+                    setActiveTheme(name);
+                    audio.playPop();
+                  }}
+                  className={`px-3 py-1.5 text-[10px] font-black rounded-full transition-all lowercase ${
+                    activeTheme === name ? 'bg-black text-white' : 'bg-transparent text-black hover:bg-slate-50'
+                  }`}
+                >
+                  {name}
+                </button>
+              ))}
+            </div>
+
+            {/* Mute Button */}
+            <button 
+              onClick={() => setIsMuted(!isMuted)} 
+              className="bg-white border-[3px] border-black p-2.5 rounded-full shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-0.5 hover:shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all flex items-center justify-center text-black"
+            >
+              {isMuted ? <VolumeX className="w-4 h-4 stroke-[3px]" /> : <Volume2 className="w-4 h-4 stroke-[3px]" />}
+            </button>
+
+            {/* Guide Info Overlay */}
+            <button 
+              onClick={() => setShowInfo(!showInfo)} 
+              className={`${t.accent} border-[3px] border-black px-4 py-2 rounded-full font-black text-xs uppercase shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:translate-y-0.5 hover:shadow-[1.5px_1.5px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all flex items-center gap-1.5`}
+            >
+              <Info className="w-3.5 h-3.5 stroke-[3px]" />
+              <span>info</span>
+            </button>
+          </div>
+        </header>
+
+        {showInfo && (
+          <div className="bg-[#FFE4E6] border-[4px] border-black p-5 rounded-[24px] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] relative transition-all animate-fade-in">
+            <button 
+              onClick={() => setShowInfo(false)} 
+              className="absolute right-4 top-4 bg-white border-[2.5px] border-black p-1 rounded-full hover:bg-black hover:text-white transition-colors"
+            >
+              <X className="w-4 h-4 stroke-[3px]" />
+            </button>
+            <h3 className="text-base font-black uppercase mb-1 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-rose-500 fill-rose-500" /> welcome to arcade.
+            </h3>
+            <p className="font-bold text-xs uppercase tracking-wide leading-relaxed text-slate-600 max-w-2xl">
+              experience a custom sensory machine. switch modes using the navigation pills. play stacker, or customize gravity trajectories inside the stimulant sandbox. compile custom synthesizer loops down below.
+            </p>
+          </div>
+        )}
+
+        {/* --- MAIN GAME CABINET GRID --- */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
+          
+          {/* LEFT: THE VIEWPORT CABINET (7 Columns) */}
+          <div className="md:col-span-7 flex flex-col gap-4">
+            
+            {/* STACKER / STIMULANT TAB SELECTOR */}
+            <div className={`border-[4px] border-black ${t.panelBg} p-2 rounded-full shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] flex gap-2 justify-around items-center`}>
+              {[
+                { id: 'stacker', label: 'stacker.' },
+                { id: 'stimulant', label: 'stimulant.' }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    audio.playPop();
+                    setActiveTab(tab.id);
+                  }}
+                  className={`flex-1 text-center py-2.5 rounded-full font-black text-xs transition-all uppercase border-2 ${
+                    activeTab === tab.id 
+                      ? 'bg-black text-white border-black shadow-md' 
+                      : 'bg-transparent border-transparent text-slate-500 hover:text-black hover:bg-slate-50'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* STACKER GAME BOARD */}
+            {activeTab === 'stacker' && (
+              <div className={`border-[4px] border-black ${t.panelBg} rounded-[32px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden`}>
+                <div className="bg-black border-b-[4px] border-black p-4 flex items-center justify-between text-white">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-rose-500" />
+                    <div className="w-3 h-3 rounded-full bg-teal-400" />
+                    <span className="font-bold text-[10px] tracking-wider uppercase ml-1.5">stacker_viewport.exe</span>
+                  </div>
+                  <div className="bg-[#334155] px-3 py-1 rounded-full text-[9px] font-black tracking-widest uppercase">
+                    layer_0{stackLevel + 1}/{STACK_HEIGHT}
+                  </div>
+                </div>
+
+                <div className={`p-6 relative flex items-center justify-center transition-all ${stackFlashScreen ? 'opacity-30 scale-95' : ''} ${t.gridBg}`}>
+                  {comboPopup && (
+                    <div className="absolute top-10 bg-black border-2 border-white text-white text-xs font-black py-1.5 px-4 rounded-full shadow-[4px_4px_0px_rgba(0,0,0,1)] animate-bounce select-none z-30 uppercase tracking-wider">
+                      {comboPopup}
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-8 gap-2 w-full max-w-[320px]">
+                    {Array(STACK_HEIGHT).fill(null).map((_, y) => {
+                      return Array(STACK_WIDTH).fill(null).map((_, x) => {
+                        const currentY = STACK_HEIGHT - 1 - stackLevel;
+                        let isFilled = stackGrid[y][x] === 1;
+
+                        if (y === currentY && stackGameState === 'PLAYING') {
+                          if (x >= stackBlockPos && x < stackBlockPos + stackBlockWidth) {
+                            isFilled = true;
+                          }
+                        }
+
+                        return (
+                          <div 
+                            key={`${y}-${x}`} 
+                            className={`aspect-square border-[3.5px] border-black transition-all rounded-[8px] ${
+                              isFilled 
+                                ? `${t.highlight} shadow-[inset_2px_2px_0px_rgba(255,255,255,0.7)] scale-100` 
+                                : `${t.panelBg} opacity-80 scale-95`
+                            }`} 
+                          />
+                        );
+                      });
+                    })}
+                  </div>
+
+                  {/* Overlays for Game States */}
+                  {stackGameState !== 'PLAYING' && (
+                    <div className="absolute inset-0 bg-black/90 flex flex-col justify-center items-center text-center p-6 backdrop-blur-xs">
+                      {stackGameState === 'START' && (
+                        <div className="text-white flex flex-col items-center">
+                          <div className="w-16 h-16 bg-[#FFE24D] border-[3px] border-white rounded-2xl flex items-center justify-center animate-bounce mb-4 rotate-3 shadow-md">
+                            <Gamepad2 className="w-8 h-8 text-black" />
+                          </div>
+                          <h2 className="text-2xl font-black uppercase mb-1 text-[#2DD4BF]">stacker.exe</h2>
+                          <p className="text-[10px] uppercase opacity-75 mt-1 tracking-widest max-w-[200px]">align blocks perfectly on top of each other</p>
+                          <button 
+                            onClick={handleStartStackGame}
+                            className="mt-6 bg-[#C084FC] border-[3px] border-white text-black font-black uppercase text-xs py-3.5 px-6 rounded-full shadow-[4px_4px_0px_0px_rgba(255,255,255,0.6)] active:translate-y-0.5"
+                          >
+                            launch game
+                          </button>
+                        </div>
+                      )}
+
+                      {stackGameState === 'GAMEOVER' && (
+                        <div className="text-white flex flex-col items-center">
+                          <div className="bg-[#F43F5E] text-black font-black border-[3px] border-white text-xl py-2 px-5 rounded-full rotate-[-2deg] mb-3 shadow-md">
+                            tower_crumbled!
+                          </div>
+                          <p className="text-xs mt-3 uppercase font-extrabold text-slate-300">score: {stackScore} // best: {highScoreStacker}</p>
+                          <button 
+                            onClick={handleStartStackGame}
+                            className="mt-6 bg-[#2DD4BF] border-[3px] border-white text-black font-black uppercase text-xs py-3 px-5 rounded-full shadow-[4px_4px_0px_0px_rgba(255,255,255,0.6)] active:translate-y-0.5"
+                          >
+                            retry stack
+                          </button>
+                        </div>
+                      )}
+
+                      {stackGameState === 'WIN' && (
+                        <div className="text-white flex flex-col items-center">
+                          <div className="w-16 h-16 bg-[#2DD4BF] border-[3px] border-white rounded-full flex items-center justify-center animate-pulse mb-3 shadow-md">
+                            <Trophy className="w-8 h-8 text-black" />
+                          </div>
+                          <h2 className="text-2xl font-black uppercase mb-1 text-[#FFE24D]">victory!</h2>
+                          <button 
+                            onClick={handleStartStackGame}
+                            className="mt-6 bg-[#F43F5E] border-[3px] border-white text-black font-black uppercase text-xs py-3.5 px-6 rounded-full shadow-[4px_4px_0px_0px_rgba(255,255,255,0.6)]"
+                          >
+                            play new round
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-4 border-t-[4px] border-black bg-black flex flex-col items-stretch">
+                  <button
+                    disabled={stackGameState !== 'PLAYING'}
+                    onClick={handleDropStackBlock}
+                    className={`w-full ${t.secondary} text-white font-black tracking-widest text-sm uppercase py-4 rounded-full border-[3px] border-black shadow-[4px_4px_0px_0px_rgba(255,255,255,0.35)] hover:translate-y-0.5 active:translate-y-1 active:shadow-none transition-all disabled:opacity-35 disabled:cursor-not-allowed`}
+                  >
+                    {stackGameState === 'PLAYING' ? 'drop layer [space]' : 'system standby'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* STIMULANT VIEWPORT AND CONTROLS */}
+            {activeTab === 'stimulant' && (
+              <div className={`border-[4px] border-black ${t.panelBg} rounded-[32px] shadow-[8px_8px_0px_0px_rgba(0,0,0,1)] flex flex-col overflow-hidden animate-fade-in`}>
+                
+                <div className="bg-black border-b-[4px] border-black p-4 flex items-center justify-between text-white">
+                  <div className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full bg-rose-500" />
+                    <div className="w-3 h-3 rounded-full bg-teal-400" />
+                    <span className="font-bold text-[10px] tracking-wider uppercase ml-1.5">visualizer_stream.exe</span>
+                  </div>
+                  <div className="bg-[#334155] px-3 py-1 rounded-full text-[9px] font-black tracking-widest uppercase">
+                    g-force: {gravityStr}
+                  </div>
+                </div>
+
+                {/* Gravity Canvas */}
+                <div className="relative overflow-hidden cursor-crosshair bg-[#111827]">
+                  <canvas 
+                    ref={canvasRef} 
+                    onClick={handleCanvasClick}
+                    className="w-full block h-[400px]"
+                  />
+                  <div className="absolute top-4 left-4 bg-black/80 text-white font-mono text-[9px] uppercase p-2 border border-white/20 rounded-md pointer-events-none tracking-widest">
+                    brush: {activeTool} <br />
+                    click inside display to place
+                  </div>
+                </div>
+
+                {/* Sub control triggers */}
+                <div className="p-4 border-t-[4px] border-black bg-black flex gap-3 justify-between">
+                  <button
+                    onClick={triggerPresets}
+                    className="flex-1 bg-[#A78BFA] text-black border-[3px] border-black py-3.5 rounded-full font-black text-xs uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(255,255,255,0.25)] hover:translate-y-0.5 active:translate-y-1 transition-all"
+                  >
+                    load preset map
+                  </button>
+                  <button
+                    onClick={handleClearAll}
+                    className="flex-1 bg-[#F43F5E] text-white border-[3px] border-black py-3.5 rounded-full font-black text-xs uppercase tracking-widest shadow-[4px_4px_0px_0px_rgba(255,255,255,0.25)] hover:translate-y-0.5 active:translate-y-1 transition-all"
+                  >
+                    flush display
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* RIGHT: SCOREBOARD & CHIPTUNE SEQUENCER (5 Columns) */}
+          <div className="md:col-span-5 flex flex-col gap-6">
+            
+            {/* CONDITIONAL CONTROLS SIDEBAR PANEL */}
+            {activeTab === 'stacker' ? (
+              <div className={`border-[4px] border-black bg-white p-5 rounded-[28px] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]`}>
+                <div className="flex justify-between items-center mb-4 pb-3 border-b-2 border-slate-100">
+                  <h3 className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <span>score_metrics</span>
+                  </h3>
+                  <span className="bg-[#E2E8F0] px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider">stats</span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3.5">
+                  <div className="border-[3px] border-black p-3.5 bg-slate-50 rounded-[18px] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                    <span className="text-[9px] font-black opacity-55 uppercase block mb-1">current</span>
+                    <span className="text-2xl font-black leading-none">{stackScore}</span>
+                  </div>
+
+                  <div className="border-[3px] border-black p-3.5 bg-slate-50 rounded-[18px] shadow-[3px_3px_0px_0px_rgba(0,0,0,1)]">
+                    <span className="text-[9px] font-black opacity-55 uppercase block mb-1">best</span>
+                    <span className="text-2xl font-black leading-none">{highScoreStacker}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className={`border-[4px] border-black bg-white p-5 rounded-[28px] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] flex flex-col gap-4 animate-fade-in`}>
+                <div className="flex justify-between items-center pb-3 border-b-2 border-slate-100">
+                  <h3 className="text-xs font-black uppercase tracking-wider flex items-center gap-1.5">
+                    <span>resonance_controls</span>
+                  </h3>
+                  <span className="bg-[#E2E8F0] px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider">variables</span>
+                </div>
+
+                {/* Tool Brush selector */}
+                <div className="grid grid-cols-3 gap-1 bg-slate-50 p-1 border-2 border-black rounded-full">
+                  {[
+                    { id: 'bumper', label: 'notes.' },
+                    { id: 'attractor', label: 'gravity.' },
+                    { id: 'clear', label: 'erase.' }
+                  ].map((tool) => (
+                    <button
+                      key={tool.id}
+                      onClick={() => {
+                        setActiveTool(tool.id);
+                        audio.playPop();
+                      }}
+                      className={`text-[9px] py-2 font-black uppercase rounded-full transition-all ${
+                        activeTool === tool.id ? 'bg-black text-white' : 'bg-transparent text-slate-500'
+                      }`}
+                    >
+                      {tool.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* SCALE PICKER */}
+                <div className="flex flex-col gap-1.5 pt-2">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">harmonic scale:</span>
+                  <div className="grid grid-cols-3 gap-1 bg-slate-50 p-1 border-2 border-black rounded-full">
+                    {Object.keys(SCALES).map((scale) => (
+                      <button
+                        key={scale}
+                        onClick={() => {
+                          setActiveScale(scale);
+                          audio.playPop();
+                        }}
+                        className={`text-[9px] py-2 font-black uppercase rounded-full transition-all ${
+                          activeScale === scale ? 'bg-black text-white' : 'bg-transparent text-slate-500'
+                        }`}
+                      >
+                        {scale.replace('_', ' ')}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* FLOW SLIDERS */}
+                <div className="flex flex-col gap-3 pt-2">
+                  <div className="flex justify-between text-[10px] font-black uppercase text-slate-500">
+                    <span>flow rate:</span>
+                    <span className="text-black font-mono">{spawnSpeed} px/s</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="10" 
+                    value={spawnSpeed}
+                    onChange={(e) => setSpawnSpeed(parseFloat(e.target.value))}
+                    className="w-full accent-black cursor-pointer h-2 bg-slate-100 border border-black rounded-lg"
+                  />
+
+                  <div className="flex justify-between text-[10px] font-black uppercase text-slate-500">
+                    <span>gravity pull:</span>
+                    <span className="text-black font-mono">{gravityStr}g</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0" 
+                    max="0.5" 
+                    step="0.05"
+                    value={gravityStr}
+                    onChange={(e) => setGravityStr(parseFloat(e.target.value))}
+                    className="w-full accent-black cursor-pointer h-2 bg-slate-100 border border-black rounded-lg"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* CHILL BEAT CHIPTUNE SEQUENCER */}
+            <div className={`border-[4px] border-black bg-white rounded-[28px] shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] overflow-hidden`}>
+              
+              <div className={`${t.accent} border-b-[4px] border-black p-4 flex items-center justify-between`}>
+                <span className="font-extrabold text-xs uppercase tracking-wider flex items-center gap-2">
+                  <Music className="w-4 h-4 stroke-[3px]" /> chill_sounds.exe
+                </span>
+                <button
+                  onClick={() => {
+                    audio.init();
+                    setSeqPlaying(!seqPlaying);
+                  }}
+                  className={`border-[2.5px] border-black px-4 py-1.5 rounded-full font-black text-[10px] uppercase shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] hover:translate-y-0.5 hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] active:translate-y-1 active:shadow-none transition-all ${
+                    seqPlaying ? 'bg-white text-black' : 'bg-black text-white'
+                  }`}
+                >
+                  {seqPlaying ? 'stop' : 'vibe'}
+                </button>
+              </div>
+
+              <div className="p-4 flex flex-col gap-4">
+                
+                {/* Wave selector */}
+                <div className="p-2.5 bg-slate-50 border-[2.5px] border-black rounded-[16px] flex flex-col gap-1.5">
+                  <div className="text-[9px] font-black uppercase text-slate-500 tracking-wider flex items-center gap-1">
+                    <Sliders className="w-3 h-3" /> synth wave type:
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 bg-white p-1 border-2 border-black rounded-full">
+                    {['sine', 'triangle', 'square'].map((wave) => (
+                      <button
+                        key={wave}
+                        onClick={() => {
+                          setSynthWave(wave);
+                          audio.playPop();
+                        }}
+                        className={`text-[9px] py-1.5 font-black uppercase rounded-full transition-all ${
+                          synthWave === wave ? 'bg-black text-white' : 'bg-transparent text-black'
+                        }`}
+                      >
+                        {wave}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                    click nodes below to design your background soundtrack loop:
+                  </p>
+
+                  <div className="flex flex-col gap-2 mb-2">
+                    {seqGrid.map((row, rowIndex) => (
+                      <div key={rowIndex} className="flex gap-2 justify-between">
+                        {row.map((cell, stepIndex) => (
+                          <button
+                            key={stepIndex}
+                            onClick={() => toggleSequencerNode(rowIndex, stepIndex)}
+                            className={`aspect-square flex-1 border-[2.5px] border-black rounded-[8px] transition-all ${
+                              cell === 1 
+                                ? 'bg-[#FF7396] shadow-[inset_1.5px_1.5px_0px_rgba(255,255,255,0.7)] scale-100' 
+                                : currentStep === stepIndex && seqPlaying
+                                  ? 'bg-slate-200' 
+                                  : 'bg-white hover:bg-slate-50'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-[9px] font-black text-slate-400 uppercase tracking-widest pt-2 border-t-2 border-slate-100">
+                  <span>8-bit step loop</span>
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-[#2DD4BF] animate-ping" />
+                    live synth active
+                  </span>
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+  );
+}
